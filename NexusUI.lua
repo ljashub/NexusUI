@@ -1,6 +1,7 @@
 --[[
-    NexusUI Library v1.0
+    NexusUI Library v2.0
     A modern and feature-rich Roblox UI Library
+    Inspired by Rayfield Interface Suite
     Created: December 2025
 ]]
 
@@ -12,6 +13,8 @@ local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local CoreGui = game:GetService("CoreGui")
 local RunService = game:GetService("RunService")
+local HttpService = game:GetService("HttpService")
+local Players = game:GetService("Players")
 
 -- Variables
 local screenGui
@@ -20,6 +23,9 @@ local dragToggle = false
 local dragSpeed = 0.25
 local dragStart = nil
 local startPos = nil
+local SaveManager = {}
+local Notifications = {}
+local ActiveKeybinds = {}
 
 -- Utility Functions
 local function MakeDraggable(frame)
@@ -82,6 +88,100 @@ local function CreateRipple(button, x, y)
             ripple:Destroy()
         end)
     end)
+end
+
+-- Notification System
+function NexusUI:Notify(config)
+    config = config or {}
+    config.Title = config.Title or "Notification"
+    config.Content = config.Content or "This is a notification"
+    config.Duration = config.Duration or 5
+    config.Image = config.Image or nil
+    config.Actions = config.Actions or {}
+    
+    spawn(function()
+        local notifFrame = Instance.new("Frame")
+        notifFrame.Name = "Notification"
+        notifFrame.Parent = screenGui or game:GetService("CoreGui"):FindFirstChild("NexusUI")
+        notifFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+        notifFrame.BorderSizePixel = 0
+        notifFrame.Position = UDim2.new(1, 10, 1, -80)
+        notifFrame.Size = UDim2.new(0, 300, 0, 80)
+        notifFrame.ClipsDescendants = true
+        notifFrame.ZIndex = 1000
+        
+        local notifCorner = Instance.new("UICorner")
+        notifCorner.CornerRadius = UDim.new(0, 10)
+        notifCorner.Parent = notifFrame
+        
+        local notifStroke = Instance.new("UIStroke")
+        notifStroke.Color = Color3.fromRGB(100, 100, 255)
+        notifStroke.Thickness = 1
+        notifStroke.Parent = notifFrame
+        
+        local titleLabel = Instance.new("TextLabel")
+        titleLabel.Parent = notifFrame
+        titleLabel.BackgroundTransparency = 1
+        titleLabel.Position = UDim2.new(0, 15, 0, 10)
+        titleLabel.Size = UDim2.new(1, -30, 0, 20)
+        titleLabel.Font = Enum.Font.GothamBold
+        titleLabel.Text = config.Title
+        titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+        titleLabel.TextSize = 14
+        titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+        titleLabel.ZIndex = 1001
+        
+        local contentLabel = Instance.new("TextLabel")
+        contentLabel.Parent = notifFrame
+        contentLabel.BackgroundTransparency = 1
+        contentLabel.Position = UDim2.new(0, 15, 0, 35)
+        contentLabel.Size = UDim2.new(1, -30, 0, 35)
+        contentLabel.Font = Enum.Font.Gotham
+        contentLabel.Text = config.Content
+        contentLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+        contentLabel.TextSize = 12
+        contentLabel.TextWrapped = true
+        contentLabel.TextXAlignment = Enum.TextXAlignment.Left
+        contentLabel.TextYAlignment = Enum.TextYAlignment.Top
+        contentLabel.ZIndex = 1001
+        
+        -- Slide in animation
+        notifFrame:TweenPosition(UDim2.new(1, -310, 1, -80), Enum.EasingDirection.Out, Enum.EasingStyle.Quart, 0.5, true)
+        
+        wait(config.Duration)
+        
+        -- Slide out animation
+        notifFrame:TweenPosition(UDim2.new(1, 10, 1, -80), Enum.EasingDirection.In, Enum.EasingStyle.Quart, 0.5, true)
+        wait(0.5)
+        notifFrame:Destroy()
+    end)
+end
+
+-- Save Manager
+function SaveManager:SetFolder(folderName)
+    self.Folder = folderName
+    if not isfolder(folderName) then
+        makefolder(folderName)
+    end
+end
+
+function SaveManager:SetFile(fileName)
+    self.FileName = fileName
+end
+
+function SaveManager:Save(data)
+    if not self.Folder or not self.FileName then return end
+    local json = HttpService:JSONEncode(data)
+    writefile(self.Folder .. "/" .. self.FileName, json)
+end
+
+function SaveManager:Load()
+    if not self.Folder or not self.FileName then return {} end
+    if isfile(self.Folder .. "/" .. self.FileName) then
+        local json = readfile(self.Folder .. "/" .. self.FileName)
+        return HttpService:JSONDecode(json)
+    end
+    return {}
 end
 
 -- Main Window Creation
@@ -759,11 +859,209 @@ function NexusUI:CreateWindow(config)
             return paragraphFrame
         end
         
+        function Tab:CreateSection(name)
+            local sectionLabel = Instance.new("TextLabel")
+            sectionLabel.Name = "Section"
+            sectionLabel.Parent = tabContent
+            sectionLabel.BackgroundTransparency = 1
+            sectionLabel.Size = UDim2.new(1, -10, 0, 30)
+            sectionLabel.Font = Enum.Font.GothamBold
+            sectionLabel.Text = name
+            sectionLabel.TextColor3 = Color3.fromRGB(100, 100, 255)
+            sectionLabel.TextSize = 16
+            sectionLabel.TextXAlignment = Enum.TextXAlignment.Left
+            
+            local sectionPadding = Instance.new("UIPadding")
+            sectionPadding.Parent = sectionLabel
+            sectionPadding.PaddingLeft = UDim.new(0, 5)
+            
+            local divider = Instance.new("Frame")
+            divider.Parent = sectionLabel
+            divider.BackgroundColor3 = Color3.fromRGB(100, 100, 255)
+            divider.BorderSizePixel = 0
+            divider.Position = UDim2.new(0, 0, 1, -2)
+            divider.Size = UDim2.new(1, 0, 0, 2)
+            
+            local dividerCorner = Instance.new("UICorner")
+            dividerCorner.CornerRadius = UDim.new(1, 0)
+            dividerCorner.Parent = divider
+            
+            return sectionLabel
+        end
+        
+        function Tab:CreateKeybind(config)
+            config = config or {}
+            config.Name = config.Name or "Keybind"
+            config.CurrentKeybind = config.CurrentKeybind or "NONE"
+            config.HoldToInteract = config.HoldToInteract or false
+            config.Flag = config.Flag or config.Name
+            config.Callback = config.Callback or function() end
+            
+            local keybindFrame = Instance.new("Frame")
+            keybindFrame.Name = config.Name
+            keybindFrame.Parent = tabContent
+            keybindFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+            keybindFrame.BorderSizePixel = 0
+            keybindFrame.Size = UDim2.new(1, -10, 0, 40)
+            
+            local keybindCorner = Instance.new("UICorner")
+            keybindCorner.CornerRadius = UDim.new(0, 6)
+            keybindCorner.Parent = keybindFrame
+            
+            local keybindLabel = Instance.new("TextLabel")
+            keybindLabel.Parent = keybindFrame
+            keybindLabel.BackgroundTransparency = 1
+            keybindLabel.Position = UDim2.new(0, 10, 0, 0)
+            keybindLabel.Size = UDim2.new(0.6, 0, 1, 0)
+            keybindLabel.Font = Enum.Font.Gotham
+            keybindLabel.Text = config.Name
+            keybindLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+            keybindLabel.TextSize = 14
+            keybindLabel.TextXAlignment = Enum.TextXAlignment.Left
+            
+            local keybindButton = Instance.new("TextButton")
+            keybindButton.Parent = keybindFrame
+            keybindButton.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+            keybindButton.BorderSizePixel = 0
+            keybindButton.Position = UDim2.new(1, -90, 0.5, -15)
+            keybindButton.Size = UDim2.new(0, 80, 0, 30)
+            keybindButton.Font = Enum.Font.GothamBold
+            keybindButton.Text = config.CurrentKeybind
+            keybindButton.TextColor3 = Color3.fromRGB(100, 100, 255)
+            keybindButton.TextSize = 12
+            
+            local keybindButtonCorner = Instance.new("UICorner")
+            keybindButtonCorner.CornerRadius = UDim.new(0, 6)
+            keybindButtonCorner.Parent = keybindButton
+            
+            local listening = false
+            local currentKey = config.CurrentKeybind
+            
+            keybindButton.MouseButton1Click:Connect(function()
+                if listening then return end
+                listening = true
+                keybindButton.Text = "..."
+                
+                local connection
+                connection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+                    if not gameProcessed and input.UserInputType == Enum.UserInputType.Keyboard then
+                        local keyName = input.KeyCode.Name
+                        currentKey = keyName
+                        keybindButton.Text = keyName
+                        listening = false
+                        connection:Disconnect()
+                        
+                        ActiveKeybinds[keyName] = {
+                            Callback = config.Callback,
+                            HoldToInteract = config.HoldToInteract
+                        }
+                    end
+                end)
+            end)
+            
+            if currentKey ~= "NONE" then
+                ActiveKeybinds[currentKey] = {
+                    Callback = config.Callback,
+                    HoldToInteract = config.HoldToInteract
+                }
+            end
+            
+            return keybindFrame
+        end
+        
+        function Tab:CreateColorPicker(config)
+            config = config or {}
+            config.Name = config.Name or "Color Picker"
+            config.Color = config.Color or Color3.fromRGB(255, 255, 255)
+            config.Flag = config.Flag or config.Name
+            config.Callback = config.Callback or function() end
+            
+            local colorFrame = Instance.new("Frame")
+            colorFrame.Name = config.Name
+            colorFrame.Parent = tabContent
+            colorFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+            colorFrame.BorderSizePixel = 0
+            colorFrame.Size = UDim2.new(1, -10, 0, 40)
+            
+            local colorCorner = Instance.new("UICorner")
+            colorCorner.CornerRadius = UDim.new(0, 6)
+            colorCorner.Parent = colorFrame
+            
+            local colorLabel = Instance.new("TextLabel")
+            colorLabel.Parent = colorFrame
+            colorLabel.BackgroundTransparency = 1
+            colorLabel.Position = UDim2.new(0, 10, 0, 0)
+            colorLabel.Size = UDim2.new(0.7, 0, 1, 0)
+            colorLabel.Font = Enum.Font.Gotham
+            colorLabel.Text = config.Name
+            colorLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+            colorLabel.TextSize = 14
+            colorLabel.TextXAlignment = Enum.TextXAlignment.Left
+            
+            local colorDisplay = Instance.new("Frame")
+            colorDisplay.Parent = colorFrame
+            colorDisplay.BackgroundColor3 = config.Color
+            colorDisplay.BorderSizePixel = 0
+            colorDisplay.Position = UDim2.new(1, -45, 0.5, -12)
+            colorDisplay.Size = UDim2.new(0, 35, 0, 24)
+            
+            local colorDisplayCorner = Instance.new("UICorner")
+            colorDisplayCorner.CornerRadius = UDim.new(0, 6)
+            colorDisplayCorner.Parent = colorDisplay
+            
+            local colorButton = Instance.new("TextButton")
+            colorButton.Parent = colorDisplay
+            colorButton.BackgroundTransparency = 1
+            colorButton.Size = UDim2.new(1, 0, 1, 0)
+            colorButton.Text = ""
+            
+            colorButton.MouseButton1Click:Connect(function()
+                -- Simple color cycling for demonstration
+                local r = math.random(0, 255)
+                local g = math.random(0, 255)
+                local b = math.random(0, 255)
+                local newColor = Color3.fromRGB(r, g, b)
+                colorDisplay.BackgroundColor3 = newColor
+                pcall(config.Callback, newColor)
+            end)
+            
+            return colorFrame
+        end
+        
         Table.insert(Window.Tabs, Tab)
         return Tab
     end
     
     return Window
 end
+
+-- Keybind Handler
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    
+    if input.UserInputType == Enum.UserInputType.Keyboard then
+        local keyName = input.KeyCode.Name
+        if ActiveKeybinds[keyName] then
+            local keybind = ActiveKeybinds[keyName]
+            if not keybind.HoldToInteract then
+                pcall(keybind.Callback)
+            end
+        end
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    
+    if input.UserInputType == Enum.UserInputType.Keyboard then
+        local keyName = input.KeyCode.Name
+        if ActiveKeybinds[keyName] then
+            local keybind = ActiveKeybinds[keyName]
+            if keybind.HoldToInteract then
+                pcall(keybind.Callback)
+            end
+        end
+    end
+end)
 
 return NexusUI
